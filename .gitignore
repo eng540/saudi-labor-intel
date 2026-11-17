@@ -1,0 +1,12 @@
+# ملفات نظام
+.DS_Store
+Thumbs.db
+*.tmp
+*~
+# بيئات عمل
+node_modules/
+__pycache__/
+.venv/
+# أدوات محلية
+*.log
+research/tmp/
