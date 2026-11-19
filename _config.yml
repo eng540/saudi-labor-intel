@@ -1,0 +1,10 @@
+# SAUDI-LABOR-INTEL-001 — إعدادات GitHub Pages (Jekyll)
+# ثيم Primer يمنح صفحات ماركداون تنسيقاً شبيهاً بـ GitHub.
+theme: jekyll-theme-primer
+markdown: kramdown
+lang: ar
+# ملفات الأدوات والمصادر لا تحتاج معالجة
+exclude:
+  - tools
+  - research/_sources
+  - README.md
