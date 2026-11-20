@@ -63,6 +63,10 @@ def main():
             for i, line in enumerate(text):
                 if line.startswith('|') and i and not text[i-1].startswith('|'):
                     check(not text[i-1].strip(), f'Missing table boundary: {path.name}:{i+1}')
+    flow = (ROOT / 'flows/04-employer-onboarding.md').read_text()
+    check('يفقد العامل أجره في 7' not in flow and '100 ريال/شهر' not in flow, 'Audited error remains in flowchart')
+    check('م61/5-6' in flow and 'م64' in flow and '9 حالات' in flow, 'Flowchart legal references disagree')
+    check('60 يوماً للنقل' in (ROOT / 'flows/02-renewal-exit.md').read_text(), 'Absence route missing from flowchart')
     html = (ROOT / 'search.html').read_text()
     kb = json.loads(re.search(r'<script id="kb-data" type="application/json">(.*?)</script>', html, re.S).group(1))
     for path in (ROOT / 'data').glob('*.csv'):
