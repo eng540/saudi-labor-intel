@@ -113,7 +113,7 @@ TEMPLATE = r"""<!DOCTYPE html>
   .unknown-note { color: var(--warn); }
   footer.site { margin-block: 1.5rem 2.5rem; color: var(--muted); font-size: .85rem; }
   @container (width < 640px) {
-    table, tbody, tr, th, td { display: block; }
+    table, caption, tbody, tr, th, td { display: block; width: 100%; }
     thead { display: none; }
     tr { border-block-end: 1px solid var(--line); padding-block: .5rem; }
     tbody th { position: static; background: transparent; }
@@ -133,7 +133,7 @@ TEMPLATE = r"""<!DOCTYPE html>
   </div>
 </header>
 <main id="results" class="wrap">
-  <p>صفحة بحث محلية مستقلة تعمل دون إنترنت، تُمكّن من البحث والتصفية في السجلات الأربعة عشر للقاعدة المعرفية. المصادر الرسمية مذكورة في كل صف.</p>
+  <p>صفحة بحث محلية مستقلة تعمل دون إنترنت، تُمكّن من البحث والتصفية في السجلات الأربعة عشر للقاعدة المعرفية. المصادر ودرجة التحقق مذكورة حسب المتاح؛ بعض الإحالات داخلية وليست مصادر رسمية مباشرة.</p>
   <form class="controls" onsubmit="return false;">
     <div class="row">
       <div class="field">
@@ -174,7 +174,16 @@ TEMPLATE = r"""<!DOCTYPE html>
 <script>
 (function () {
   "use strict";
-  var KB = JSON.parse(document.getElementById("kb-data").textContent);
+  var packed = JSON.parse(document.getElementById("kb-data").textContent);
+  var KB = { _titles: packed._titles };
+  Object.keys(packed).filter(function (key) { return key !== "_titles"; }).forEach(function (key) {
+    var dataset = packed[key];
+    KB[key] = dataset.rows.map(function (values) {
+      var row = {};
+      dataset.columns.forEach(function (column, i) { row[column] = values[i]; });
+      return row;
+    });
+  });
   var ds = document.getElementById("dataset");
   var q = document.getElementById("q");
   var st = document.getElementById("status");
@@ -189,10 +198,28 @@ TEMPLATE = r"""<!DOCTYPE html>
     return Object.keys(first);
   }
 
+  function normalizeArabic(value) {
+    return String(value || "").normalize("NFKC")
+      .replace(/[\u064B-\u065F\u0670\u0640]/g, "")
+      .replace(/[أإآٱ]/g, "ا").replace(/ى/g, "ي").toLowerCase();
+  }
+
+  function sourceLinks(value) {
+    // Split explicit source separators, never the spaces inside Arabic URL paths.
+    return value.split(/\s+[+·]\s+/).map(function (part) {
+      var url = part.trim();
+      if (/^https?:\/\//i.test(url) && !/[<>]/.test(url)) return url;
+      if (/^(docs|cases|flows)\/[a-zA-Z0-9_-]+\.md$/.test(url)) {
+        return url.replace(/\.md$/, ".html");
+      }
+      return null;
+    }).filter(Boolean);
+  }
+
   function render() {
     var key = ds.value;
     var rows = KB[key] || [];
-    var needle = (q.value || "").trim().toLowerCase();
+    var needle = normalizeArabic(q.value).trim();
     var statusFilter = st.value;
     var cols = colsOf(key);
     theadRow.innerHTML = "";
@@ -205,7 +232,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     var shown = 0;
     var frag = document.createDocumentFragment();
     rows.forEach(function (row) {
-      var hay = cols.map(function (c) { return String(row[c] || ""); }).join(" ").toLowerCase();
+      var hay = normalizeArabic(cols.map(function (c) { return String(row[c] || ""); }).join(" "));
       if (needle && hay.indexOf(needle) === -1) return;
       if (statusFilter && row["status"] !== statusFilter) return;
       shown++;
@@ -223,10 +250,19 @@ TEMPLATE = r"""<!DOCTYPE html>
           cell.appendChild(b);
         }
         if (c === "source_url" && val) {
-          var a = document.createElement("a");
-          a.href = val; a.textContent = "المصدر"; a.rel = "noopener noreferrer"; a.target = "_blank";
-          cell.textContent = "";
-          cell.appendChild(a);
+          var urls = sourceLinks(val);
+          if (urls.length) {
+            cell.textContent = "";
+            urls.forEach(function (url, index) {
+              if (index) cell.appendChild(document.createTextNode(" · "));
+              var a = document.createElement("a");
+              a.href = url;
+              a.textContent = urls.length > 1 ? "المصدر " + (index + 1) : "المصدر";
+              a.rel = "noopener noreferrer";
+              a.target = "_blank";
+              cell.appendChild(a);
+            });
+          }
         }
         cell.setAttribute("data-label", c);
         tr.appendChild(cell);
@@ -266,18 +302,18 @@ def main() -> int:
             skipped.append(fname)
             continue
         key = Path(fname).stem
-        kb[key] = rows
+        kb[key] = {"columns": list(rows[0]) if rows else [], "rows": [list(row.values()) for row in rows]}
         titles[key] = title
         built.append(f"{fname} ({len(rows)} صف)")
     kb["_titles"] = titles
     options = "\n".join(
         f'          <option value="{Path(f).stem}">{t}</option>' for f, t in REGISTRIES
     )
-    build_date = git_commit_date() or date.today().isoformat()
+    build_date = date.today().isoformat()
     html = (
         TEMPLATE
         .replace("__DATASET_OPTIONS__", options)
-        .replace("__DATA_JSON__", json.dumps(kb, ensure_ascii=False))
+        .replace("__DATA_JSON__", json.dumps(kb, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c"))
         .replace("__BUILD_DATE__", build_date)
     )
     OUT.write_text(html, encoding="utf-8")
