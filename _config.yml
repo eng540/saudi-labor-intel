@@ -8,3 +8,7 @@ exclude:
   - tools
   - research/_sources
   - README.md
+
+  - vendor
+  - Gemfile
+  - Gemfile.lock
